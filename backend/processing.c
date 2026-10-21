@@ -65,6 +65,7 @@ Mesure* charger_fichier_csv(const char *nom_fichier, int *nb_mesures, int *capac
 /**
  * Ajoute une nouvelle mesure au tableau dynamique.
  */
+// Adds a new measurement. If the list is full, it asks for more memory first.
 int ajouter_mesure(Mesure **tableau, int *nb_mesures, int *capacite, Mesure nouvelle) {
     if (*nb_mesures >= *capacite) {
         *capacite = (*capacite == 0) ? 10 : (*capacite * 2);
@@ -82,6 +83,26 @@ int ajouter_mesure(Mesure **tableau, int *nb_mesures, int *capacite, Mesure nouv
     (*nb_mesures)++;
     return 1;
 }
+
+/**
+ * Supprime une mesure a l'index specifie en decatissant les elements.
+ */
+// Deletes the measurement at the given position by moving the following measurements one place to the left.
+int supprimer_mesure(Mesure *tableau, int *nb_mesures, int index) {
+    if (index < 0 || index >= *nb_mesures) {
+        printf("[ERREUR] Index invalide (%d).\n", index);
+        return 0;
+    }
+
+    // Close the gap left by the deleted measurement.
+    for (int i = index; i < *nb_mesures - 1; i++) {
+        tableau[i] = tableau[i + 1];
+    }
+    (*nb_mesures)--;
+    printf("[SUCCES] Mesure a l'index %d supprimee.\n", index);
+    return 1;
+}
+
 
 /**
  * Filtre et affiche les mesures d'un batiment donne.
