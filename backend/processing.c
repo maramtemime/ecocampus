@@ -65,6 +65,7 @@ Mesure* charger_fichier_csv(const char *nom_fichier, int *nb_mesures, int *capac
 /**
  * Ajoute une nouvelle mesure au tableau dynamique.
  */
+// Adds a new measurement. If the list is full, it asks for more memory first.
 int ajouter_mesure(Mesure **tableau, int *nb_mesures, int *capacite, Mesure nouvelle) {
     if (*nb_mesures >= *capacite) {
         *capacite = (*capacite == 0) ? 10 : (*capacite * 2);
@@ -82,3 +83,173 @@ int ajouter_mesure(Mesure **tableau, int *nb_mesures, int *capacite, Mesure nouv
     (*nb_mesures)++;
     return 1;
 }
+
+/**
+ * Supprime une mesure a l'index specifie en decatissant les elements.
+ */
+// Deletes the measurement at the given position by moving the following measurements one place to the left.
+int supprimer_mesure(Mesure *tableau, int *nb_mesures, int index) {
+    if (index < 0 || index >= *nb_mesures) {
+        printf("[ERREUR] Index invalide (%d).\n", index);
+        return 0;
+    }
+
+    // Close the gap left by the deleted measurement.
+    for (int i = index; i < *nb_mesures - 1; i++) {
+        tableau[i] = tableau[i + 1];
+    }
+    (*nb_mesures)--;
+    printf("[SUCCES] Mesure a l'index %d supprimee.\n", index);
+    return 1;
+}
+
+
+/**
+ * Filtre et affiche les mesures d'un batiment donne.
+ */
+
+void rechercher_par_batiment(const Mesure *tableau, int nb_mesures, const char *batiment) {
+    printf("\n--- Resultats de recherche pour le batiment : %s ---\n", batiment);
+    int trouve = 0;
+    for (int i = 0; i < nb_mesures; i++) {
+        // Compare names without treating uppercase and lowercase letters as different.
+        if (strcasecmp(tableau[i].batiment, batiment) == 0) {
+            printf("[%d] Ressource: %-11s | Valeur: %6.2f | Seuil: %6.2f | Date: %s | Alerte: %s\n",
+                   i, tableau[i].ressource, tableau[i].valeur, tableau[i].seuil,
+                   tableau[i].date, tableau[i].alerte ? "OUI" : "NON");
+            trouve++;
+        }
+    }
+    if (trouve == 0) printf("Aucune mesure trouvee pour ce batiment.\n");
+}
+
+/**
+ * Filtre et affiche les mesures par type de ressource.
+ */
+
+void rechercher_par_ressource(const Mesure *tableau, int nb_mesures, const char *ressource) {
+    printf("\n--- Resultats de recherche pour la ressource : %s ---\n", ressource);
+    int trouve = 0;
+    for (int i = 0; i < nb_mesures; i++) {
+        if (strcasecmp(tableau[i].ressource, ressource) == 0) {
+            printf("[%d] Batiment: %-15s | Valeur: %6.2f | Seuil: %6.2f | Date: %s | Alerte: %s\n",
+                   i, tableau[i].batiment, tableau[i].valeur, tableau[i].seuil,
+                   tableau[i].date, tableau[i].alerte ? "OUI" : "NON");
+            trouve++;
+        }
+    }
+    if (trouve == 0) printf("Aucune mesure trouvee pour cette ressource.\n");
+}
+
+/**
+ * Trie le tableau de mesures selon la valeur consommee (Tri par selection).
+ */
+
+void trier_par_consommation(Mesure *tableau, int nb_mesures, int croissant) {
+    for (int i = 0; i < nb_mesures - 1; i++) {
+        int idx_ext = i;
+        for (int j = i + 1; j < nb_mesures; j++) {
+            if (croissant ? (tableau[j].valeur < tableau[idx_ext].valeur)
+                          : (tableau[j].valeur > tableau[idx_ext].valeur)) {
+                idx_ext = j;
+            }
+        }
+        if (idx_ext != i) {
+            // Use a temporary variable to swap two complete measurements.
+            Mesure tmp = tableau[i];
+            tableau[i] = tableau[idx_ext];
+            tableau[idx_ext] = tmp;
+        }
+    }
+    printf("[SUCCES] Tableau trie par consommation (%s).\n", croissant ? "croissant" : "decroissant");
+}
+
+/**
+ * Trie le tableau de mesures par date (Ordre chronologique).
+ */
+
+void trier_par_date(Mesure *tableau, int nb_mesures) {
+    for (int i = 0; i < nb_mesures - 1; i++) {
+        int idx_min = i;
+        for (int j = i + 1; j < nb_mesures; j++) {
+            if (strcmp(tableau[j].date, tableau[idx_min].date) < 0) {
+                idx_min = j;
+            }
+        }
+        if (idx_min != i) {
+            Mesure tmp = tableau[i];
+            tableau[i] = tableau[idx_min];
+            tableau[idx_min] = tmp;
+        }
+    }
+    printf("[SUCCES] Tableau trie par date.\n");
+}
+
+/**
+ * Calcule les agregats statistiques (total, moyenne, min, max, alertes) par batiment.
+ */
+
+Statistique* calculer_statistiques(const Mesure *tableau, int nb_mesures, int *nb_stats) {
+    *nb_stats = 0;
+    Statistique *stats = NULL;
+
+    for (int i = 0; i < nb_mesures; i++) {
+        int index_exist = -1;
+        for (int j = 0; j < *nb_stats; j++) {
+            if (strcmp(stats[j].batiment, tableau[i].batiment) == 0) {
+                index_exist = j;
+                break;
+            }
+        }
+
+        if (index_exist != -1) {
+            // Mise a jour du batiment existant
+            stats[index_exist].total += tableau[i].valeur;
+            if (tableau[i].valeur < stats[index_exist].min) stats[index_exist].min = tableau[i].valeur;
+            if (tableau[i].valeur > stats[index_exist].max) stats[index_exist].max = tableau[i].valeur;
+            if (tableau[i].alerte) stats[index_exist].nb_alertes++;
+        } else {
+            // Ajout d'un nouveau batiment
+            (*nb_stats)++;
+            stats = (Statistique *)realloc(stats, (*nb_stats) * sizeof(Statistique));
+            strcpy(stats[*nb_stats - 1].batiment, tableau[i].batiment);
+            stats[*nb_stats - 1].total = tableau[i].valeur;
+            stats[*nb_stats - 1].min = tableau[i].valeur;
+            stats[*nb_stats - 1].max = tableau[i].valeur;
+            stats[*nb_stats - 1].nb_alertes = tableau[i].alerte ? 1 : 0;
+            stats[*nb_stats - 1].moyenne = 0;
+        }
+    }
+
+    // Calcul de la moyenne pour chaque batiment
+    for (int i = 0; i < *nb_stats; i++) {
+        int compt = 0;
+        for (int j = 0; j < nb_mesures; j++) {
+            if (strcmp(tableau[j].batiment, stats[i].batiment) == 0) compt++;
+        }
+        stats[i].moyenne = (compt > 0) ? (stats[i].total / compt) : 0;
+    }
+
+    return stats;
+}
+
+/**
+ * Calcule la moyenne mobile des N dernieres valeurs pour un batiment (Fonctionnalite Bonus).
+ */
+
+float calculer_moyenne_mobile(const Mesure *tableau, int nb_mesures, const char *batiment, int fenetre) {
+    float somme = 0.0;
+    int compteur = 0;
+
+    // Start from the newest item and stop when we have enough matching measurements.
+    for (int i = nb_mesures - 1; i >= 0 && compteur < fenetre; i--) {
+        if (strcasecmp(tableau[i].batiment, batiment) == 0) {
+            somme += tableau[i].valeur;
+            compteur++;
+        }
+    }
+
+    if (compteur == 0) return 0.0;
+    return somme / compteur;
+}
+
